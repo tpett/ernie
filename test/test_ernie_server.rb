@@ -95,6 +95,30 @@ class ErnieServerTest < Test::Unit::TestCase
           assert false, 'failed to raise on missing function'
         end
       end
+
+      should "get an error on malformed BERT" do
+        svc.timeout = 5
+        # This BERT will evaluate in erlang but will fail with BERT.decode
+        bert = [131, 104, 4, 100, 0, 4, 99, 97, 108, 108, 100, 0, 3, 101, 120, 116, 100, 0, 3, 102,
+          117, 110, 108, 0, 0, 0, 1, 104, 3, 100, 0, 4, 98, 101, 114, 116, 100, 0, 4, 100, 105, 99,
+          116, 108, 0, 0, 0, 2, 104, 2, 109, 0, 0, 0, 5, 119, 105, 108, 99, 111, 108, 0, 0, 0, 1,
+          104, 3, 100, 0, 4, 98, 101, 114, 116, 100, 0, 4, 100, 105, 99, 116, 108, 0, 0, 0, 1, 104,
+          2, 109, 0, 0, 0, 3, 102, 111, 111, 104, 4, 100, 0, 4, 98, 101, 114, 116, 100, 0, 6, 115,
+          116, 114, 105, 110, 103, 108, 0, 0, 0, 5, 97, 85, 97, 84, 97, 70, 97, 45, 97, 56, 106,
+          109, 0, 0, 0, 3, 98, 97, 114, 106, 106, 104, 2, 109, 0, 0, 0, 5, 97, 112, 112, 108, 101,
+          109, 0, 0, 0, 5, 118, 97, 108, 117, 101, 106, 106].pack('C*')
+        assert_raises(StandardError) { BERT.decode(bert) }
+        begin
+          raw_request(bert)
+          fail "Expected a BERTRPC::ServerError"
+        rescue BERTRPC::ServerError => e
+          # Expected behavior
+        rescue BERTRPC::ReadTimeoutError => e
+          assert false, 'server hung on request'
+        else
+          assert false, 'failed to raise on malformed resquest'
+        end
+      end
     end
 
     context "cast" do
@@ -176,7 +200,13 @@ class ErnieServerTest < Test::Unit::TestCase
   end
   
   protected
-  
+
+  def raw_request(bert)
+    request = BERTRPC::Request.new(svc, :call, {})
+    action = BERTRPC::Action.new(svc, request, nil, nil, nil)
+    action.decode_bert_response(action.transaction(bert))
+  end
+
   def svc
     @servers[rand(@servers.size-1)]
   end

@@ -133,7 +133,19 @@ class Ernie
 
     loop do
       self.procline('waiting')
-      iruby = self.read_berp(input)
+
+      begin
+        iruby = self.read_berp(input)
+      rescue => e
+        oruby = t[:error, t[:server, 0, e.class.to_s, e.message, e.backtrace]]
+        if self.log.level <= Logger::ERROR
+          self.log.error("BERT decoder failed.  Returning error.")
+          self.log.error("<- " + oruby.inspect)
+          self.log.error(e.backtrace.join("\n"))
+        end
+        write_berp(output, oruby)
+      end
+
       self.count += 1
 
       unless iruby
